@@ -481,8 +481,8 @@ def _draw_hsl(draw: ImageDraw.Draw, data: dict | None,
 
 
 def _draw_daycare(draw: ImageDraw.Draw, data: dict | None,
-                  x: int, y: int, w: int, h: int):
-    cy = _label(draw, x, y, "PÄIVÄKOTI", stale=bool(data and data.get("_stale")))
+                  x: int, y: int, w: int, h: int, *, label: str = "PÄIVÄKOTI"):
+    cy = _label(draw, x, y, label, stale=bool(data and data.get("_stale")))
 
     if not data:
         _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
@@ -565,6 +565,7 @@ _DRAW_FUNCS: dict[str, object] = {
     "hsl":         _draw_hsl,
     "waste":       _draw_waste,
     "evaka":       _draw_daycare,   # module name differs from function name
+    "wilma":       lambda draw, data, x, y, w, h: _draw_daycare(draw, data, x, y, w, h, label="KOULU"),
 }
 
 

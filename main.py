@@ -73,6 +73,8 @@ def fetch_module(name: str, config: dict, use_cache: bool) -> "dict | None":
             from data.news import fetch
         elif name == "keep":
             from data.keep import fetch
+        elif name == "wilma":
+            from data.wilma import fetch
         else:
             log.error("Unknown module: %s", name)
             return None
@@ -102,7 +104,7 @@ def parse_args():
     )
     parser.add_argument(
         "--only",
-        choices=["weather", "electricity", "waste", "calendar", "evaka", "hsl", "news", "keep"],
+        choices=["weather", "electricity", "waste", "calendar", "evaka", "hsl", "news", "keep", "wilma"],
         help="Run only one module (for testing)"
     )
     parser.add_argument(
@@ -214,6 +216,7 @@ def main():
         "evaka": ("evaka", "username"),
         "hsl":   ("hsl",   "api_key"),
         "keep":  ("keep",  "username"),
+        "wilma": ("wilma", "username"),
     }
 
     # Collect unique module names from the grid (skip None/blank cells)

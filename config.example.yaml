@@ -59,6 +59,16 @@ evaka:
   password: "your-password"
   base_url: "https://espoonvarhaiskasvatus.fi"  # change for your municipality
 
+# ── Wilma school calendar (optional) ─────────────────────────────────────────
+# Wilma is used by Finnish schools (inschool.fi). Supplements or replaces the
+# eVaka cell when the child moves to primary school.
+# ical_url: find it in Wilma → Preferences → Calendar export → copy the .ics link
+wilma:
+  username: "firstname.lastname@school.fi"
+  password: "your-password"
+  base_url: "https://espoo.inschool.fi"   # change for your school's Wilma
+  ical_url: "https://espoo.inschool.fi/!TOKEN/preferences/token?tag=schedule/export/students/ID/Wilma.ics"
+
 # ── HSL transit (optional) ───────────────────────────────────────────────────
 # Shows next departures from your home location to a destination.
 # Requires a free API key from https://portal-api.digitransit.fi/
@@ -74,7 +84,7 @@ hsl:
 
 # ── Layout ───────────────────────────────────────────────────────────────────
 # Assign any data module to any of the 6 grid cells (3 columns × 2 rows).
-# Available modules: weather, calendar, electricity, waste, hsl, evaka, keep
+# Available modules: weather, calendar, electricity, waste, hsl, evaka, wilma, keep
 # Use ~ (null) to leave a cell blank.
 # The news strip is always rendered full-width at the bottom and is not configurable.
 layout:
