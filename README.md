@@ -39,27 +39,16 @@ A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Ras
 | Daycare | Espoo eVaka (`/api/citizen/auth/weak-login`) | Username + password |
 | Transit | [HSL Digitransit v2 GraphQL](https://portal-api.digitransit.fi/) | API key |
 
-## Development setup
-
-Runs on macOS and Windows. Both use PNG simulation — no Raspberry Pi needed for development.
+## Development setup (macOS)
 
 ### 1. Clone and create virtualenv
 
-**macOS / Linux:**
 ```bash
 git clone <repo>
 cd eInk
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-**Windows (Git Bash or similar):**
-```bash
-git clone <repo>
-cd eInk
-python -m venv venv
-venv/Scripts/pip install -r requirements.txt
 ```
 
 ### 2. Configure
@@ -112,123 +101,26 @@ Register at [portal-api.digitransit.fi](https://portal-api.digitransit.fi/) and 
 
 ### 5. Run
 
-**macOS:**
 ```bash
-python main.py --preview           # full run, opens PNG in Preview
+source venv/bin/activate
+
+# Full run, open preview on macOS
+python main.py --preview
+
+# Force data refresh (skip cache)
 python main.py --no-cache --preview
-python main.py --only weather      # test single module
+
+# Test a single module
+python main.py --only weather
+python main.py --only hsl --no-cache
+
+# Partial-refresh just the cells listed in config.partial_updates (no API calls).
+# On macOS the simulator overlays the patched regions onto output/dashboard.png.
+python main.py --partial-only
+
+# Force a true full refresh instead of the default fast refresh
+python main.py --full-refresh
 ```
-
-**Windows:**
-```bash
-venv/Scripts/python main.py --preview           # full run, opens PNG in default viewer
-venv/Scripts/python main.py --no-cache --preview
-venv/Scripts/python main.py --only weather      # test single module
-
-# Optional: suppress Unicode log noise in cp1252 terminals
-PYTHONIOENCODING=utf-8 venv/Scripts/python main.py --no-cache
-```
-
-> **Windows note:** Windows terminals using cp1252 encoding show `--- Logging error ---` for the
-> ✓/✗ log characters — this is cosmetic only. The PNG is generated correctly regardless.
-> Set `PYTHONIOENCODING=utf-8` to suppress it.
-
-## Alternative deployment: ESP32 + Home Assistant
-
-The dashboard can also run on a **Waveshare ESP32-S3-Touch-LCD-7** (800×480 color LCD) using ESPHome and Home Assistant as the data broker. This removes the Pi entirely.
-
-### Architecture
-
-Two approaches are available:
-
-**Option A — Image server (recommended, reuses existing code):**
-```
-External APIs → AppDaemon (runs render.py) → /homeassistant/www/dashboard.png
-                                                         ↓
-                                 ESPHome online_image → Waveshare 7" LCD
-```
-AppDaemon (HA add-on) runs the existing Python renderer on a schedule and saves the PNG to HA's `www/` folder. ESPHome fetches and displays it via the `online_image` component.
-
-**Option B — LVGL (full color, touch-capable):**
-```
-External APIs → Home Assistant sensors → ESPHome LVGL UI → Waveshare 7" LCD
-```
-All data lives in HA as sensors; ESPHome renders the layout natively using LVGL widgets.
-
-### Hardware
-
-| Part | Model |
-|---|---|
-| Display | Waveshare ESP32-S3-Touch-LCD-7 (800×480, RGB, touch) |
-| Power | USB-C |
-
-### Option A setup: AppDaemon image server
-
-#### 1. Install AppDaemon add-on
-
-**Settings → Add-ons → Add-on Store → AppDaemon** → Install, enable Start on boot.
-
-#### 2. Add Python packages
-
-**AppDaemon → Configuration tab**, add under `python_packages`:
-```
-Pillow, requests, pycaruna, icalendar, recurring_ical_events, aiohttp
-```
-
-#### 3. Clone the repo into AppDaemon's config directory
-
-From the HA Terminal add-on (the host path `/addon_configs/a0d7b954_appdaemon/` is `/config/` inside AppDaemon's container):
-
-```bash
-cd /addon_configs/a0d7b954_appdaemon
-git clone https://github.com/jaatuli/masterplan eink
-cp eink/config.example.yaml eink/config.yaml
-nano eink/config.yaml   # fill in credentials
-```
-
-#### 4. Install the AppDaemon app
-
-Copy `ha/appdaemon/apps/dashboard_renderer.py` and `ha/appdaemon/apps/apps.yaml` to `/config/apps/` (the shared HA apps directory).
-
-#### 5. Restart AppDaemon
-
-The app runs immediately on startup and every 10 minutes after. The PNG is served at:
-```
-http://<your-ha-ip>:8123/local/dashboard.png
-```
-
-#### Path notes (AppDaemon container vs host)
-
-| Location | Host path (Terminal add-on) | AppDaemon container path |
-|---|---|---|
-| AppDaemon config | `/addon_configs/a0d7b954_appdaemon/` | `/config/` |
-| HA config / www | `/config/` | `/homeassistant/` |
-| eink repo | `/addon_configs/a0d7b954_appdaemon/eink/` | `/config/eink/` |
-| Output PNG | `/config/www/dashboard.png` | `/homeassistant/www/dashboard.png` |
-
-#### 6. ESPHome config
-
-```yaml
-online_image:
-  - url: http://192.168.1.x:8123/local/dashboard.png
-    id: dashboard_img
-    format: PNG
-    update_interval: 600s
-    on_download_finished:
-      - component.update: my_display
-
-display:
-  - platform: rpi_dpi_rgb
-    id: my_display
-    lambda: |-
-      it.image(0, 0, id(dashboard_img));
-```
-
-### ESPHome board support
-
-Use the community package [`inytar/waveshare-esp32-s3-touch-lcd-7-esphome`](https://github.com/inytar/waveshare-esp32-s3-touch-lcd-7-esphome) (requires ESPHome 2025.4.2+). PSRAM must be enabled (8MB available on this board — required for 800×480 frame buffer).
-
----
 
 ## Raspberry Pi deployment
 
@@ -245,59 +137,76 @@ Attach the Waveshare HAT to the 40-pin GPIO header with the Pi powered off.
 ### 3. Enable SPI
 
 ```bash
-ssh pi@eink.local
-sudo raspi-config   # Interface Options → SPI → Enable
-sudo reboot
+ssh -t USER@HOSTNAME "sudo raspi-config nonint do_spi 0"
 ```
 
-### 4. Install dependencies
+### 4. Install system dependencies
 
 ```bash
-# Waveshare e-Paper library
-git clone https://github.com/waveshare/e-Paper.git
-
-# Project
-git clone <repo> eInk
-cd eInk
-python3 -m venv venv
-venv/bin/pip install ~/e-Paper/RaspberryPi_JetsonNano/python
-venv/bin/pip install -r requirements.txt
-
-# System libraries required by the GPIO stack
-sudo apt install -y swig liblgpio-dev
-venv/bin/pip install spidev gpiozero lgpio
+ssh -t USER@HOSTNAME "sudo apt install -y git python3-venv python3-pip swig liblgpio-dev"
 ```
 
-### 5. Copy config
+### 5. Sync project files from Mac
 
 ```bash
-# From Mac:
-scp config.yaml pi@eink.local:~/eInk/
+./sync.sh
 ```
 
-### 6. Test
+Or manually:
+```bash
+rsync -av --exclude venv --exclude cache --exclude output --exclude .git \
+  /path/to/eInk/ USER@HOSTNAME:~/eInk/
+```
+
+### 6. Set up virtualenv and install Python dependencies
 
 ```bash
-venv/bin/python main.py
+ssh USER@HOSTNAME "cd ~/eInk && python3 -m venv venv && venv/bin/pip install -r requirements.txt"
 ```
 
-### 7. Set up cron
+The e-paper driver is `betterepd7in5` (on PyPI, pulled in by `requirements.txt`). It fixes the partial-update-after-sleep corruption the stock Waveshare driver exhibits and is significantly faster on the Pi Zero 2 W.
+
+### 7. Create required directories
 
 ```bash
-crontab -e
+ssh USER@HOSTNAME "mkdir -p ~/eInk/cache ~/eInk/output"
 ```
 
-Add:
-```
-@reboot cd /home/pi/eInk && venv/bin/python main.py >> /tmp/eink.log 2>&1
-*/10 * * * * cd /home/pi/eInk && venv/bin/python main.py >> /tmp/eink.log 2>&1
-```
-
-### Sync changes from Mac to Pi
+### 8. Copy config
 
 ```bash
-rsync -av --exclude venv --exclude cache --exclude output \
-  /path/to/eInk/ pi@eink.local:~/eInk/
+scp config.yaml USER@HOSTNAME:~/eInk/config.yaml
+```
+
+### 9. Test
+
+```bash
+ssh USER@HOSTNAME "cd ~/eInk && venv/bin/python main.py --no-cache"
+```
+
+### 10. Set up cron
+
+The crontab is checked in at `cron/eink.crontab` and installed via `sync_cron.sh`. Three rhythms run on `flock`-protected mutually-exclusive minute slots so they can't collide on the SPI bus:
+
+| Slot | Command | Purpose |
+|---|---|---|
+| Minutes 1–9, 11–19, …, 51–59 | `main.py --partial-only` | Partial-refresh cells in `config.partial_updates` (no API calls) |
+| Minutes 10, 20, 30, 40, 50 | `main.py` | Fast refresh of the full dashboard |
+| Minute 0 (every hour) + `@reboot` | `main.py --full-refresh` | True full refresh — clears ghosting, bootstraps partial baseline |
+
+Edit `cron/eink.crontab` (update `juhani` to your username) then push:
+
+```bash
+./sync_cron.sh
+```
+
+The script preserves any other crontab entries on the Pi — it only replaces the block between `# >>> eink-managed >>>` markers.
+
+### Sync changes from Mac
+
+```bash
+./sync.sh        # rsync project files (excludes venv, cache, output, .git)
+./sync_cron.sh   # only when cron/eink.crontab changed
 ```
 
 ## Project structure
@@ -306,8 +215,12 @@ rsync -av --exclude venv --exclude cache --exclude output \
 eInk/
 ├── main.py              # Entry point, CLI args, module orchestration
 ├── render.py            # Pillow-based image renderer (800×480, grayscale)
+├── sync.sh              # rsync project files Mac → Pi
+├── sync_cron.sh         # Push cron/eink.crontab to the Pi
 ├── config.yaml          # Your config (not committed)
 ├── config.example.yaml  # Template
+├── cron/
+│   └── eink.crontab     # Managed crontab block (installed via sync_cron.sh)
 ├── data/
 │   ├── weather.py       # Open-Meteo
 │   ├── calendar.py      # iCal / Google Calendar
@@ -315,12 +228,12 @@ eInk/
 │   ├── electricity.py   # Caruna / pycaruna
 │   ├── waste.py         # Manual waste schedule
 │   ├── evaka.py         # Espoo daycare (eVaka)
-│   └── hsl.py           # HSL Digitransit transit
+│   └── hsl.py           # HSL Digitransit transit (incl. drop_past_departures filter)
 ├── display/
-│   ├── simulator.py     # PNG output for macOS/Windows development
-│   └── epaper.py        # Waveshare 7.5" v2 driver (Raspberry Pi)
+│   ├── simulator.py     # PNG output for macOS development
+│   └── epaper.py        # Waveshare 7.5" V2 driver via betterepd7in5
 ├── fonts/               # Optional: place Inter-Regular.ttf + Inter-Bold.ttf here
-├── cache/               # JSON cache files (auto-generated)
+├── cache/               # JSON cache files + cur_display.png partial baseline (auto-generated)
 └── output/              # Output PNG (auto-generated, macOS only)
 ```
 
@@ -336,3 +249,17 @@ cache:
   evaka_ttl_minutes: 1440   # daycare: once per day
   electricity_ttl_minutes: 720
 ```
+
+## Partial updates
+
+The cron's per-minute slot runs `main.py --partial-only`, which re-renders the dashboard from cache only (no API calls) and partial-refreshes the cells listed in config:
+
+```yaml
+partial_updates:
+  clock: true   # ticks every minute
+  hsl: true     # drops connections whose departure has passed
+```
+
+Available cells are defined in `render.py` as `PARTIAL_CELLS`. Each entry is `{region, data_key, filter}` where `filter` is an optional `module:function` that mutates the cell's data before render — the HSL cell uses `data.hsl:drop_past_departures` to remove connections where the recomputed `minutes_until ≤ 0`. New partial-eligible cells need an `x`-aligned region (multiples of 8) and an entry in the registry.
+
+If `partial_updates` is missing or empty, `--partial-only` is a no-op.

@@ -9,6 +9,8 @@ class SimulatorDisplay:
 
     OUTPUT_PATH = Path("output/dashboard.png")
 
+    PARTIAL_PATH = Path("output/partial.png")
+
     def show(self, image, open_preview: bool = False):
         self.OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
         image.save(self.OUTPUT_PATH)
@@ -22,3 +24,34 @@ class SimulatorDisplay:
                 subprocess.Popen(["open", str(self.OUTPUT_PATH)])
             else:
                 subprocess.Popen(["xdg-open", str(self.OUTPUT_PATH)])
+
+    show_full = show
+
+    def show_partials(self, regions, open_preview: bool = False):
+        """Simulator stand-in for multi-region partial refresh.
+
+        Overlays each region onto `output/dashboard.png` (single open/save)
+        and writes the last region to `output/partial.png` for inspection."""
+        if not regions:
+            return
+        from PIL import Image
+        self.PARTIAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        regions[-1][0].save(self.PARTIAL_PATH)
+        print(f"Partial region saved: {self.PARTIAL_PATH.resolve()} "
+              f"(boxes={[box for _, box in regions]})")
+
+        if self.OUTPUT_PATH.exists():
+            full = Image.open(self.OUTPUT_PATH).convert("L")
+            for region_image, box in regions:
+                full.paste(region_image.convert("L"), (box[0], box[1]))
+            full.save(self.OUTPUT_PATH)
+
+        if open_preview:
+            system = platform.system()
+            if system == "Windows":
+                os.startfile(str(self.PARTIAL_PATH))
+            elif system == "Darwin":
+                subprocess.Popen(["open", str(self.PARTIAL_PATH)])
+            else:
+                subprocess.Popen(["xdg-open", str(self.PARTIAL_PATH)])
