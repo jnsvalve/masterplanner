@@ -58,6 +58,8 @@ evaka:
   username: "your@email.com"
   password: "your-password"
   base_url: "https://espoonvarhaiskasvatus.fi"  # change for your municipality
+  letter_sender: "Kengurut"   # substring match on sender name (for evaka_letter module)
+  letter_count: 2             # how many recent group messages to summarise
 
 # ── Claude API (required for wilma_letter) ───────────────────────────────────
 # Used by the wilma_letter module to extract bullet points from weekly letters.
@@ -126,6 +128,7 @@ cache:
   evaka_ttl_minutes: 1440       # daycare: once per day
   electricity_ttl_minutes: 720  # electricity: twice per day
   wilma_letter_ttl_minutes: 240 # weekly letter: 4 hours
+  evaka_letter_ttl_minutes: 240 # daycare group messages: 4 hours
 
 # ── News ──────────────────────────────────────────────────────────────────────
 # Reads any RSS feed. Defaults to YLE major headlines (no credentials needed).

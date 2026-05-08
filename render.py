@@ -547,6 +547,38 @@ def _draw_waste(draw: ImageDraw.Draw, data: dict | None,
         cy += line_h
 
 
+def _draw_evaka_letter(draw: ImageDraw.Draw, data: dict | None,
+                       x: int, y: int, w: int, h: int):
+    cy = _label(draw, x, y, "HOITOVIESTIT", stale=bool(data and data.get("_stale")))
+
+    if not data:
+        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        return
+
+    bullets = data.get("bullets", [])
+    sources = data.get("sources", [])
+
+    if not bullets:
+        _text(draw, (x + PAD, cy), "Ei viestejä", FONT_TINY, fill=GRAY)
+        return
+
+    if sources:
+        _text(draw, (x + PAD, cy), sources[0][:30], FONT_SMALL)
+        cy += 22
+
+    line_h = 19
+    max_w  = w - 2 * PAD
+    for bullet in bullets:
+        if cy + line_h > y + h - PAD:
+            break
+        lines = _wrap_text(draw, bullet, FONT_TINY, max_w)
+        for line in lines[:2]:
+            if cy + line_h > y + h - PAD:
+                break
+            _text(draw, (x + PAD, cy), line, FONT_TINY)
+            cy += line_h
+
+
 def _draw_wilma_letter(draw: ImageDraw.Draw, data: dict | None,
                        x: int, y: int, w: int, h: int):
     cy = _label(draw, x, y, "VIIKKOKIRJE", stale=bool(data and data.get("_stale")))
@@ -598,7 +630,8 @@ _DRAW_FUNCS: dict[str, object] = {
     "waste":       _draw_waste,
     "evaka":       _draw_daycare,   # module name differs from function name
     "wilma":        lambda draw, data, x, y, w, h: _draw_daycare(draw, data, x, y, w, h, label="KOULU"),
-    "wilma_letter": _draw_wilma_letter,
+    "wilma_letter":  _draw_wilma_letter,
+    "evaka_letter":  _draw_evaka_letter,
 }
 
 
@@ -654,12 +687,12 @@ def render(
     news   : news module data (always rendered full-width at the bottom).
     width, height : image dimensions in pixels.
 
-    Layout:
+    Layout (N rows, 1–3):
 
-      ┌──────────────────┬──────────────────┬──────────────────┐  ROW_H px
-      │  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │
-      ├──────────────────┼──────────────────┼──────────────────┤  ROW_H px
-      │  layout[1][0]    │  layout[1][1]    │  layout[1][2]    │
+      ┌──────────────────┬──────────────────┬──────────────────┐
+      │  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │  row_h px each
+      ├─ ... ────────────┼──────────────────┼──────────────────┤
+      │  layout[N-1][0]  │  layout[N-1][1]  │  layout[N-1][2]  │
       ├──────────────────┴──────────────────┴──────────────────┤  NEWS_H px
       │  UUTISET  (full width)                                  │
       └────────────────────────────────────────────────────────┘
@@ -669,29 +702,31 @@ def render(
     if layout is None:
         layout = DEFAULT_LAYOUT
 
-    # Compute geometry from actual width/height
+    n_rows = max(1, min(len(layout), 3))
+
+    # Compute geometry from actual width/height and row count
     col_w  = (width - 2) // 3
     col2_x = col_w + 1
     col3_x = col_w * 2 + 2
-    row_h  = (height - NEWS_H) // 2
-    row2_y = row_h
-    news_y = row_h * 2
+    row_h  = (height - NEWS_H) // n_rows
+    news_y = row_h * n_rows
 
     xs = [0, col2_x, col3_x]
     ws = [col_w, col_w, width - col3_x]
-    ys = [0, row2_y]
+    ys = [i * row_h for i in range(n_rows)]
 
     img  = Image.new("L", (width, height), BG)
     draw = ImageDraw.Draw(img)
 
     # Grid dividers
-    _vertical_divider(draw, col_w,           0, news_y)
-    _vertical_divider(draw, col_w * 2 + 1,   0, news_y)
-    _divider(draw, 0, row2_y, width)
-    _divider(draw, 0, news_y,  width)
+    _vertical_divider(draw, col_w,         0, news_y)
+    _vertical_divider(draw, col_w * 2 + 1, 0, news_y)
+    for i in range(1, n_rows):
+        _divider(draw, 0, i * row_h, width)
+    _divider(draw, 0, news_y, width)
 
     # Draw each cell according to the layout grid
-    for row_idx, row in enumerate(layout[:2]):
+    for row_idx, row in enumerate(layout[:n_rows]):
         for col_idx, module_name in enumerate(row[:3]):
             x = xs[col_idx]
             y = ys[row_idx]

@@ -113,8 +113,8 @@ def _login(base_url: str, username: str, password: str) -> tuple[requests.Sessio
 # ── Wilma messages ────────────────────────────────────────────────────────────
 
 def _fetch_message_list(s: requests.Session, base_url: str, role_prefix: str) -> list[dict]:
-    r = s.get(f"{base_url}{role_prefix}/messages/list", timeout=15)
-    if r.status_code in (401, 403):
+    r = s.get(f"{base_url}{role_prefix}/messages/list", timeout=15, allow_redirects=False)
+    if r.status_code in (301, 302, 303, 307, 308, 401, 403):
         raise DataFetchError("_relogin")
     r.raise_for_status()
     return r.json().get("Messages", [])
@@ -129,8 +129,8 @@ def _find_latest_viikkokirje(messages: list[dict]) -> dict | None:
 
 
 def _fetch_message_body(s: requests.Session, base_url: str, role_prefix: str, msg_id: int) -> str:
-    r = s.get(f"{base_url}{role_prefix}/messages/{msg_id}", timeout=15)
-    if r.status_code in (401, 403):
+    r = s.get(f"{base_url}{role_prefix}/messages/{msg_id}", timeout=15, allow_redirects=False)
+    if r.status_code in (301, 302, 303, 307, 308, 401, 403):
         raise DataFetchError("_relogin")
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
