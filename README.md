@@ -1,20 +1,33 @@
 # E-ink Dashboard
 
-A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Raspberry Pi. Displays weather, calendar events, news headlines, waste collection schedule, daycare events, and public transit departures.
+A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Raspberry Pi. Displays weather, calendar events, news headlines, school and daycare schedules, public transit departures, and AI-extracted weekly school letters.
+
+Developed on macOS and Windows (PNG simulation), deployed on a Raspberry Pi Zero 2 W.
 
 ## Layout
 
+The six grid cells are fully configurable — assign any module to any cell in `config.yaml`. The news strip at the bottom is always full-width.
+
 ```
 ┌──────────────────┬──────────────────┬──────────────────┐
-│  PÄIVÄKOTI       │  KALENTERI       │  SÄÄ + PVM/KELLO │
-│  Daycare events  │  Calendar events │  Weather         │
+│  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │
 ├──────────────────┼──────────────────┼──────────────────┤
-│  SÄHKÖ           │  HSL             │  JÄTEHUOLTO      │
-│  Electricity     │  Transit         │  Waste schedule  │
+│  layout[1][0]    │  layout[1][1]    │  layout[1][2]    │
 ├──────────────────┴──────────────────┴──────────────────┤
 │  UUTISET  (full width, 2 headlines)                    │
 └────────────────────────────────────────────────────────┘
 ```
+
+Example:
+
+```yaml
+layout:
+  grid:
+    - [wilma_letter, calendar, weather]
+    - [wilma,        evaka,    hsl]
+```
+
+Use `~` (null) to leave a cell blank. An unconfigured module shows a placeholder.
 
 ## Hardware
 
@@ -32,17 +45,23 @@ A home dashboard for a Waveshare 7.5" e-ink display (800×480), running on a Ras
 
 | Module | Source | Auth |
 |---|---|---|
-| Weather | [Open-Meteo](https://open-meteo.com/) | None |
-| Calendar | Google Calendar iCal | Secret URL token |
-| News | YLE Uutiset RSS | None |
-| Waste | Manual schedule in config | None |
-| Daycare | Espoo eVaka (`/api/citizen/auth/weak-login`) | Username + password |
-| Transit | [HSL Digitransit v2 GraphQL](https://portal-api.digitransit.fi/) | API key |
+| `weather` | [Open-Meteo](https://open-meteo.com/) | None |
+| `calendar` | Google Calendar iCal | Secret URL token |
+| `news` | YLE Uutiset RSS | None |
+| `waste` | Manual schedule in config | None |
+| `evaka` | Espoo eVaka (`/api/citizen/auth/weak-login`) | Username + password |
+| `hsl` | [HSL Digitransit v2 GraphQL](https://portal-api.digitransit.fi/) | API key |
+| `wilma` | Wilma school calendar iCal (inschool.fi) | Username + password |
+| `wilma_letter` | Wilma messages + Claude Haiku summarisation | Username + password + Anthropic API key |
+| `electricity` | Caruna via pycaruna | Username + password |
 
-## Development setup (macOS)
+The `wilma` and `wilma_letter` modules target Finnish schools on the inschool.fi platform. `wilma` replaces or supplements `evaka` once a child moves to primary school. `wilma_letter` fetches the latest weekly teacher letter ("viikkokirje") and uses Claude Haiku to extract 4–6 concise bullet points — upcoming events, reminders, things to bring.
+
+## Development setup
 
 ### 1. Clone and create virtualenv
 
+**macOS / Linux**
 ```bash
 git clone <repo>
 cd eInk
@@ -51,10 +70,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+**Windows**
+```powershell
+git clone <repo>
+cd eInk
+python -m venv venv
+venv\Scripts\pip install -r requirements.txt
+```
+
 ### 2. Configure
 
 ```bash
-cp config.example.yaml config.yaml
+cp config.example.yaml config.yaml   # macOS/Linux
+# or: copy config.example.yaml config.yaml  (Windows)
 ```
 
 Edit `config.yaml` with your credentials and location. The file contains passwords and API keys — do not commit it.
@@ -80,9 +108,15 @@ waste:
     - type: "Sekajäte"
       interval_weeks: 2
       next_date: "2026-03-25"
-    - type: "Biojäte"
-      interval_weeks: 4
-      next_date: "2026-03-16"
+
+wilma:
+  username: "firstname.lastname@school.fi"
+  password: "your-password"
+  base_url: "https://espoo.inschool.fi"
+  ical_url: "https://espoo.inschool.fi/!TOKEN/preferences/token?tag=schedule/export/students/ID/Wilma.ics"
+
+claude:
+  api_key: "sk-ant-..."   # required only for wilma_letter
 ```
 
 ### 3. Google Calendar iCal link
@@ -97,14 +131,33 @@ calendars:
 
 ### 4. HSL API key
 
-Register at [portal-api.digitransit.fi](https://portal-api.digitransit.fi/) and create a subscription for the Routing API. Add the key to `config.yaml`.
+Register at [portal-api.digitransit.fi](https://portal-api.digitransit.fi/) and create a subscription for the Routing API.
 
-### 5. Run
+### 5. Wilma iCal URL
 
+In Wilma: *Preferences → Calendar → Calendar export → copy the .ics link*. The URL contains a token — treat it like a password.
+
+### 6. Anthropic API key (wilma_letter only)
+
+Create a key at [console.anthropic.com](https://console.anthropic.com) and add it to `config.yaml` under `claude.api_key`. The module uses Claude Haiku — a single letter extraction costs a fraction of a cent.
+
+### 7. Run
+
+**macOS / Linux**
 ```bash
 source venv/bin/activate
+python main.py --preview
+```
 
-# Full run, open preview on macOS
+**Windows**
+```powershell
+venv\Scripts\python main.py --preview
+```
+
+Common flags:
+
+```bash
+# Full run, open preview
 python main.py --preview
 
 # Force data refresh (skip cache)
@@ -112,15 +165,16 @@ python main.py --no-cache --preview
 
 # Test a single module
 python main.py --only weather
-python main.py --only hsl --no-cache
+python main.py --only wilma_letter --no-cache
 
-# Partial-refresh just the cells listed in config.partial_updates (no API calls).
-# On macOS the simulator overlays the patched regions onto output/dashboard.png.
+# Partial-refresh just the cells listed in config.partial_updates (no API calls)
 python main.py --partial-only
 
 # Force a true full refresh instead of the default fast refresh
 python main.py --full-refresh
 ```
+
+> **Windows note:** Terminals using the default cp1252 encoding show `--- Logging error ---` noise for the ✓/✗ log characters. This is cosmetic — the PNG is still generated correctly. Set `PYTHONIOENCODING=utf-8` to suppress it.
 
 ## Raspberry Pi deployment
 
@@ -146,7 +200,7 @@ ssh -t USER@HOSTNAME "sudo raspi-config nonint do_spi 0"
 ssh -t USER@HOSTNAME "sudo apt install -y git python3-venv python3-pip swig liblgpio-dev"
 ```
 
-### 5. Sync project files from Mac
+### 5. Sync project files
 
 ```bash
 ./sync.sh
@@ -164,7 +218,7 @@ rsync -av --exclude venv --exclude cache --exclude output --exclude .git \
 ssh USER@HOSTNAME "cd ~/eInk && python3 -m venv venv && venv/bin/pip install -r requirements.txt"
 ```
 
-The e-paper driver is `betterepd7in5` (on PyPI, pulled in by `requirements.txt`). It fixes the partial-update-after-sleep corruption the stock Waveshare driver exhibits and is significantly faster on the Pi Zero 2 W.
+The e-paper driver is `betterepd7in5` (on PyPI, pulled in by `requirements.txt`). It fixes partial-update corruption present in the stock Waveshare driver and is significantly faster on the Pi Zero 2 W.
 
 ### 7. Create required directories
 
@@ -194,7 +248,7 @@ The crontab is checked in at `cron/eink.crontab` and installed via `sync_cron.sh
 | Minutes 10, 20, 30, 40, 50 | `main.py` | Fast refresh of the full dashboard |
 | Minute 0 (every hour) + `@reboot` | `main.py --full-refresh` | True full refresh — clears ghosting, bootstraps partial baseline |
 
-Edit `cron/eink.crontab` (update `juhani` to your username) then push:
+Edit `cron/eink.crontab` (update the username and path placeholders marked with `# TODO`) then push:
 
 ```bash
 ./sync_cron.sh
@@ -202,10 +256,10 @@ Edit `cron/eink.crontab` (update `juhani` to your username) then push:
 
 The script preserves any other crontab entries on the Pi — it only replaces the block between `# >>> eink-managed >>>` markers.
 
-### Sync changes from Mac
+### Sync changes
 
 ```bash
-./sync.sh        # rsync project files (excludes venv, cache, output, .git)
+./sync.sh        # rsync project files
 ./sync_cron.sh   # only when cron/eink.crontab changed
 ```
 
@@ -215,8 +269,8 @@ The script preserves any other crontab entries on the Pi — it only replaces th
 eInk/
 ├── main.py              # Entry point, CLI args, module orchestration
 ├── render.py            # Pillow-based image renderer (800×480, grayscale)
-├── sync.sh              # rsync project files Mac → Pi
-├── sync_cron.sh         # Push cron/eink.crontab to the Pi
+├── sync.sh              # rsync project files to Pi
+├── sync_cron.sh         # Push cron/eink.crontab to Pi
 ├── config.yaml          # Your config (not committed)
 ├── config.example.yaml  # Template
 ├── cron/
@@ -228,13 +282,15 @@ eInk/
 │   ├── electricity.py   # Caruna / pycaruna
 │   ├── waste.py         # Manual waste schedule
 │   ├── evaka.py         # Espoo daycare (eVaka)
-│   └── hsl.py           # HSL Digitransit transit (incl. drop_past_departures filter)
+│   ├── hsl.py           # HSL Digitransit transit
+│   ├── wilma.py         # Wilma school calendar (iCal)
+│   └── wilma_letter.py  # Wilma weekly letter → Claude Haiku bullet points
 ├── display/
-│   ├── simulator.py     # PNG output for macOS development
+│   ├── simulator.py     # PNG output for local development (macOS + Windows)
 │   └── epaper.py        # Waveshare 7.5" V2 driver via betterepd7in5
 ├── fonts/               # Optional: place Inter-Regular.ttf + Inter-Bold.ttf here
 ├── cache/               # JSON cache files + cur_display.png partial baseline (auto-generated)
-└── output/              # Output PNG (auto-generated, macOS only)
+└── output/              # Output PNG (auto-generated, local dev only)
 ```
 
 ## Caching
@@ -243,16 +299,17 @@ Each module writes a JSON cache file under `cache/`. TTLs are configurable per m
 
 ```yaml
 cache:
-  ttl_minutes: 55           # weather, calendar
-  hsl_ttl_minutes: 10       # real-time transit
-  hsl_active_hours: [6, 22] # no HSL fetches outside these hours
-  evaka_ttl_minutes: 1440   # daycare: once per day
-  electricity_ttl_minutes: 720
+  ttl_minutes: 55               # weather, calendar
+  hsl_ttl_minutes: 10           # real-time transit
+  hsl_active_hours: [6, 22]     # no HSL fetches outside these hours
+  evaka_ttl_minutes: 1440       # daycare: once per day
+  electricity_ttl_minutes: 720  # electricity: twice per day
+  wilma_letter_ttl_minutes: 240 # weekly letter: 4 hours
 ```
 
 ## Partial updates
 
-The cron's per-minute slot runs `main.py --partial-only`, which re-renders the dashboard from cache only (no API calls) and partial-refreshes the cells listed in config:
+The per-minute cron slot runs `main.py --partial-only`, which re-renders the dashboard from cache only (no API calls) and partial-refreshes the cells listed in config:
 
 ```yaml
 partial_updates:
@@ -260,6 +317,16 @@ partial_updates:
   hsl: true     # drops connections whose departure has passed
 ```
 
-Available cells are defined in `render.py` as `PARTIAL_CELLS`. Each entry is `{region, data_key, filter}` where `filter` is an optional `module:function` that mutates the cell's data before render — the HSL cell uses `data.hsl:drop_past_departures` to remove connections where the recomputed `minutes_until ≤ 0`. New partial-eligible cells need an `x`-aligned region (multiples of 8) and an entry in the registry.
+Available cells are defined in `render.py` as `PARTIAL_CELLS`. Each entry carries `{region, data_key, filter}` where `filter` is an optional `module:function` that mutates the cell's data before render — the HSL cell uses `data.hsl:drop_past_departures` to remove elapsed connections. New partial-eligible cells need an `x`-aligned region (multiples of 8) and an entry in the registry.
 
 If `partial_updates` is missing or empty, `--partial-only` is a no-op.
+
+## Adding a new module
+
+1. Create `data/mymodule.py` with a `fetch(config, use_cache=True) -> dict` function following the same cache pattern as existing modules.
+2. Add a `_draw_mymodule` function in `render.py` and register it in `_DRAW_FUNCS`.
+3. Add `"mymodule"` to the `fetch_module` dispatch and `--only` choices in `main.py`.
+4. If the module requires credentials, add it to `_requires_config` in `main.py`.
+5. Add any config keys to `config.example.yaml`.
+
+Pull requests are welcome — especially for new data sources, display improvements, and support for other school or transit systems.
