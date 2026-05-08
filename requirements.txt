@@ -4,3 +4,5 @@ requests
 icalendar
 pycaruna
 betterepd7in5==0.2.1
+anthropic
+recurring-ical-events

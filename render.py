@@ -547,6 +547,38 @@ def _draw_waste(draw: ImageDraw.Draw, data: dict | None,
         cy += line_h
 
 
+def _draw_wilma_letter(draw: ImageDraw.Draw, data: dict | None,
+                       x: int, y: int, w: int, h: int):
+    cy = _label(draw, x, y, "VIIKKOKIRJE", stale=bool(data and data.get("_stale")))
+
+    if not data:
+        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        return
+
+    bullets = data.get("bullets", [])
+    subject = data.get("subject", "")
+
+    if not bullets:
+        _text(draw, (x + PAD, cy), "Ei kirjettä", FONT_TINY, fill=GRAY)
+        return
+
+    if subject:
+        _text(draw, (x + PAD, cy), subject, FONT_SMALL)
+        cy += 22
+
+    line_h = 19
+    max_w  = w - 2 * PAD
+    for bullet in bullets:
+        if cy + line_h > y + h - PAD:
+            break
+        lines = _wrap_text(draw, bullet, FONT_TINY, max_w)
+        for line in lines[:2]:
+            if cy + line_h > y + h - PAD:
+                break
+            _text(draw, (x + PAD, cy), line, FONT_TINY)
+            cy += line_h
+
+
 # ── Placeholder (unconfigured / missing module) ──────────────────────────────
 
 def _draw_placeholder(draw: ImageDraw.Draw, data: dict | None,
@@ -565,7 +597,8 @@ _DRAW_FUNCS: dict[str, object] = {
     "hsl":         _draw_hsl,
     "waste":       _draw_waste,
     "evaka":       _draw_daycare,   # module name differs from function name
-    "wilma":       lambda draw, data, x, y, w, h: _draw_daycare(draw, data, x, y, w, h, label="KOULU"),
+    "wilma":        lambda draw, data, x, y, w, h: _draw_daycare(draw, data, x, y, w, h, label="KOULU"),
+    "wilma_letter": _draw_wilma_letter,
 }
 
 

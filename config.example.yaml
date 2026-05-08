@@ -59,6 +59,13 @@ evaka:
   password: "your-password"
   base_url: "https://espoonvarhaiskasvatus.fi"  # change for your municipality
 
+# ── Claude API (required for wilma_letter) ───────────────────────────────────
+# Used by the wilma_letter module to extract bullet points from weekly letters.
+# Get an API key at https://console.anthropic.com/
+# Alternatively, set the ANTHROPIC_API_KEY environment variable.
+claude:
+  api_key: "sk-ant-..."
+
 # ── Wilma school calendar (optional) ─────────────────────────────────────────
 # Wilma is used by Finnish schools (inschool.fi). Supplements or replaces the
 # eVaka cell when the child moves to primary school.
@@ -118,6 +125,7 @@ cache:
   hsl_active_hours: [6, 22]     # HSL API only called between these hours
   evaka_ttl_minutes: 1440       # daycare: once per day
   electricity_ttl_minutes: 720  # electricity: twice per day
+  wilma_letter_ttl_minutes: 240 # weekly letter: 4 hours
 
 # ── News ──────────────────────────────────────────────────────────────────────
 # Reads any RSS feed. Defaults to YLE major headlines (no credentials needed).
