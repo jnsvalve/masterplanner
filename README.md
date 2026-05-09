@@ -6,28 +6,62 @@ Developed on macOS and Windows (PNG simulation), deployed on a Raspberry Pi Zero
 
 ## Layout
 
-The six grid cells are fully configurable — assign any module to any cell in `config.yaml`. The news strip at the bottom is always full-width.
+The grid is 3 columns × 1–3 rows, fully configurable in `config.yaml`. The news strip at the bottom is always full-width.
 
 ```
 ┌──────────────────┬──────────────────┬──────────────────┐
-│  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │
-├──────────────────┼──────────────────┼──────────────────┤
-│  layout[1][0]    │  layout[1][1]    │  layout[1][2]    │
+│  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │  ← 1–3 rows
+├─ ...─────────────┼──────────────────┼──────────────────┤
+│  layout[N-1][0]  │  layout[N-1][1]  │  layout[N-1][2]  │
 ├──────────────────┴──────────────────┴──────────────────┤
-│  UUTISET  (full width, 2 headlines)                    │
+│  UUTISET  (full width)                                  │
 └────────────────────────────────────────────────────────┘
 ```
 
-Example:
+Use `~` (null) to leave a cell blank. An unconfigured module shows a placeholder. Row height adjusts automatically — a 2-row grid gives 170 px per row, a 3-row grid gives 113 px.
+
+### Single layout
 
 ```yaml
 layout:
   grid:
     - [wilma_letter, calendar, weather]
-    - [wilma,        evaka,    hsl]
+    - [wilma,        evaka_letter, hsl]
 ```
 
-Use `~` (null) to leave a cell blank. An unconfigured module shows a placeholder.
+### Named profiles
+
+Define multiple layouts and switch between them with `--layout <name>`:
+
+```yaml
+layout:
+  active: school                  # used when --layout is omitted
+  profiles:
+    school:
+      grid:
+        - [wilma_letter, calendar, weather]
+        - [wilma,        evaka_letter, hsl]
+    weekend:
+      grid:
+        - [evaka_letter, calendar, weather]
+        - [evaka,        ~,        hsl    ]
+```
+
+Switch manually or drive it from cron:
+
+```bash
+# weekdays — uses layout.active ("school")
+python main.py
+
+# weekends — override to weekend profile
+python main.py --layout weekend
+
+# cron: automatic weekday/weekend switching
+*/10 * * * 1-5  python main.py
+*/10 * * * 6,7  python main.py --layout weekend
+```
+
+The resolution order is: `--layout` flag → `layout.active` → `layout.grid` → built-in default. Configs without profiles continue to work unchanged.
 
 ## Hardware
 
@@ -162,6 +196,9 @@ python main.py --preview
 
 # Force data refresh (skip cache)
 python main.py --no-cache --preview
+
+# Use a named layout profile
+python main.py --layout weekend --preview
 
 # Test a single module
 python main.py --only weather

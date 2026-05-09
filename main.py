@@ -123,6 +123,10 @@ def parse_args():
         "--config", default="config.yaml",
         help="Configuration file (default: config.yaml)"
     )
+    parser.add_argument(
+        "--layout",
+        help="Named layout profile from layout.profiles in config.yaml"
+    )
     return parser.parse_args()
 
 
@@ -210,10 +214,31 @@ def main():
             and all(isinstance(r, list) and len(r) == 3 for r in grid)
         )
 
-    grid = config.get("layout", {}).get("grid", DEFAULT_LAYOUT)
-    if not _validate_grid(grid):
-        log.warning("Invalid layout.grid in config — using default layout")
-        grid = DEFAULT_LAYOUT
+    def _resolve_grid(cfg: dict, profile_name: str | None) -> list:
+        layout_cfg = cfg.get("layout", {})
+        profiles   = layout_cfg.get("profiles", {})
+
+        # --layout flag > layout.active > layout.grid > DEFAULT_LAYOUT
+        name = profile_name or layout_cfg.get("active")
+        if name:
+            profile = profiles.get(name)
+            if not profile:
+                log.warning("Layout profile %r not found — using default layout", name)
+            else:
+                g = profile.get("grid")
+                if _validate_grid(g):
+                    return g
+                log.warning("Invalid grid in profile %r — using default layout", name)
+
+        g = layout_cfg.get("grid", DEFAULT_LAYOUT)
+        if not _validate_grid(g):
+            log.warning("Invalid layout.grid in config — using default layout")
+            return DEFAULT_LAYOUT
+        return g
+
+    grid = _resolve_grid(config, args.layout)
+    if args.layout:
+        log.info("Layout profile: %s", args.layout)
 
     # Modules that require specific credentials to be configured
     _requires_config: dict[str, tuple[str, str]] = {

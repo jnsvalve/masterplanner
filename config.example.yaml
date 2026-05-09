@@ -92,14 +92,30 @@ hsl:
   min_walk_rail: 15         # minimum minutes to walk to a train/metro station
 
 # ── Layout ───────────────────────────────────────────────────────────────────
-# Assign any data module to any of the 6 grid cells (3 columns × 2 rows).
-# Available modules: weather, calendar, electricity, waste, hsl, evaka, wilma, keep
+# Assign any data module to any of the grid cells (3 columns × 1–3 rows).
+# Available modules: weather, calendar, electricity, waste, hsl, evaka, wilma,
+#                    wilma_letter, evaka_letter, keep
 # Use ~ (null) to leave a cell blank.
 # The news strip is always rendered full-width at the bottom and is not configurable.
+#
+# Simple single-layout:
 layout:
   grid:
     - [evaka, calendar, weather]      # Row 1: left, center, right
     - [electricity, hsl, waste]       # Row 2: left, center, right
+
+# Named profiles — switch with: python main.py --layout <name>
+# Uncomment and populate to use:
+#  active: weekday               # default profile (used when --layout is omitted)
+#  profiles:
+#    weekday:
+#      grid:
+#        - [wilma_letter, calendar, weather]
+#        - [wilma,        evaka_letter, hsl]
+#    weekend:
+#      grid:
+#        - [evaka_letter, calendar, weather]
+#        - [evaka,        ~,        hsl    ]
 
 # ── Display ───────────────────────────────────────────────────────────────────
 display:
