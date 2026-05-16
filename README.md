@@ -6,19 +6,25 @@ Developed on macOS and Windows (PNG simulation), deployed on a Raspberry Pi Zero
 
 ## Layout
 
-The grid is 3 columns × 1–3 rows, fully configurable in `config.yaml`. The news strip at the bottom is always full-width.
+The grid is row-based and fully configurable in `config.yaml`.
+Each row can be either 3 columns (classic dashboard row) or 1 full-width module row.
+The news strip at the bottom is always full-width.
 
 ```
 ┌──────────────────┬──────────────────┬──────────────────┐
-│  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │  ← 1–3 rows
-├─ ...─────────────┼──────────────────┼──────────────────┤
-│  layout[N-1][0]  │  layout[N-1][1]  │  layout[N-1][2]  │
-├──────────────────┴──────────────────┴──────────────────┤
+│  [module, module, module]          (3-column row)      │
+├─────────────────────────────────────────────────────────┤
+│  [module]                          (full-width row)     │
+├─────────────────────────────────────────────────────────┤
 │  UUTISET  (full width)                                  │
-└────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────┘
 ```
 
 Use `~` (null) to leave a cell blank. An unconfigured module shows a placeholder. Row height adjusts automatically — a 2-row grid gives 170 px per row, a 3-row grid gives 113 px.
+
+Extra calendar-focused modules:
+- `calendar_full_upcoming`: dense upcoming list for full-width calendar views
+- `calendar_full_week`: compact 7-day weekly view for full-width calendar views
 
 ### Single layout
 
@@ -45,6 +51,12 @@ layout:
       grid:
         - [evaka_letter, calendar, weather]
         - [evaka,        ~,        hsl    ]
+    calendar_upcoming:
+      grid:
+        - [calendar_full_upcoming]
+    calendar_week:
+      grid:
+        - [calendar_full_week]
 ```
 
 Switch manually or drive it from cron:
@@ -199,6 +211,8 @@ python main.py --no-cache --preview
 
 # Use a named layout profile
 python main.py --layout weekend --preview
+python main.py --layout calendar_upcoming --preview
+python main.py --layout calendar_week --preview
 
 # Test a single module
 python main.py --only weather

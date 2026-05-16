@@ -101,6 +101,7 @@ def _parse_ical(content: bytes, cal_name: str, window_start: date, window_end: d
 
 def fetch(config: dict, use_cache: bool = True) -> dict:
     ttl = config.get("cache", {}).get("ttl_minutes", 55)
+    max_events = config.get("calendar", {}).get("max_events", 24)
 
     if use_cache and _cache_is_fresh(ttl):
         return _load_cache()
@@ -159,7 +160,7 @@ def fetch(config: dict, use_cache: bool = True) -> dict:
         ev.pop("end_time", None)
 
     data = {
-        "events":     all_events[:8],
+        "events":     all_events[:max(1, int(max_events))],
         "fetched_at": datetime.now().isoformat(timespec="seconds"),
     }
     _save_cache(data)

@@ -78,21 +78,22 @@ display/
   epaper.py          – Waveshare 7.5" V2 driver (Raspi only)
 ```
 
-## Layout (3 columns × 2 rows + full-width news strip)
+## Layout (mixed rows + full-width news strip)
 
-The 6 grid cells are configurable via `layout.grid` in `config.yaml`.
+`layout.grid` is row-based in `config.yaml`. Each row may contain:
+- 3 modules (classic three-column row)
+- 1 module (full-width row)
+
 The news strip is fixed at the bottom (always full-width).
 
 ```
-┌──────────────────┬──────────────────┬──────────────────┐  ROW_H = 170px
-│  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │
-├──────────────────┼──────────────────┼──────────────────┤  ROW_H = 170px
-│  layout[1][0]    │  layout[1][1]    │  layout[1][2]    │
-├──────────────────┴──────────────────┴──────────────────┤  NEWS_H = 140px
-│  UUTISET  (full width, 2 items stacked)                │
-└────────────────────────────────────────────────────────┘
-COL_W ≈ 266px, COL2_X = 267, COL3_X = 534
-NEWS_Y = 340, no header bar
+┌──────────────────┬──────────────────┬──────────────────┐
+│ [module, module, module]  (3-column row)               │
+├─────────────────────────────────────────────────────────┤
+│ [module]                  (full-width row)             │
+├─────────────────────────────────────────────────────────┤  NEWS_H = 140px
+│ UUTISET (full width, 2 items stacked)                  │
+└─────────────────────────────────────────────────────────┘
 ```
 
 Default layout (matches original hardcoded order):
@@ -103,16 +104,21 @@ layout:
     - [electricity, hsl, waste]
 ```
 
-Available modules for grid cells: `weather`, `calendar`, `electricity`, `waste`, `hsl`, `evaka`
+Calendar-focused full-width modules:
+- `calendar_full_upcoming` (dense upcoming list)
+- `calendar_full_week` (compact 7-day view)
+
+Available modules for grid cells: `weather`, `calendar`, `calendar_full_upcoming`, `calendar_full_week`, `electricity`, `waste`, `hsl`, `evaka`, `wilma`, `wilma_letter`, `evaka_letter`, `keep`
 Use `~` (null) to leave a cell blank. An unknown or unconfigured-but-required module shows a placeholder.
 
 ### Configurable layout internals (render.py)
 
 - `DEFAULT_LAYOUT` constant defines the fallback grid
 - `_DRAW_FUNCS` dict maps module name → draw function (e.g. `"evaka"` → `_draw_daycare`)
-- `render(data, layout, news, width, height)` iterates the grid and dispatches to draw functions
+- `render(data, layout, news, width, height)` iterates rows and dispatches cell draw functions
+- 3-cell rows get vertical dividers, 1-cell rows render full-width
 - `_draw_placeholder()` is called for blank/unknown cells
-- `main.py` reads `layout.grid`, validates it, collects unique module names, and only fetches those
+- `main.py` reads `layout.grid`, validates rows as length 1 or 3, collects unique module names, and only fetches those
 
 ## Rendering conventions (render.py)
 

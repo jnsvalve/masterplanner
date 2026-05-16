@@ -57,27 +57,31 @@ def get_display():
 def fetch_module(name: str, config: dict, use_cache: bool) -> "dict | None":
     """Fetches data for a single module. Returns None if fetching fails."""
     try:
-        if name == "weather":
+        source_name = name
+        if name in {"calendar_full_upcoming", "calendar_full_week"}:
+            source_name = "calendar"
+
+        if source_name == "weather":
             from data.weather import fetch
-        elif name == "electricity":
+        elif source_name == "electricity":
             from data.electricity import fetch
-        elif name == "waste":
+        elif source_name == "waste":
             from data.waste import fetch
-        elif name == "calendar":
+        elif source_name == "calendar":
             from data.calendar import fetch
-        elif name == "evaka":
+        elif source_name == "evaka":
             from data.evaka import fetch
-        elif name == "hsl":
+        elif source_name == "hsl":
             from data.hsl import fetch
-        elif name == "news":
+        elif source_name == "news":
             from data.news import fetch
-        elif name == "keep":
+        elif source_name == "keep":
             from data.keep import fetch
-        elif name == "wilma":
+        elif source_name == "wilma":
             from data.wilma import fetch
-        elif name == "wilma_letter":
+        elif source_name == "wilma_letter":
             from data.wilma_letter import fetch
-        elif name == "evaka_letter":
+        elif source_name == "evaka_letter":
             from data.evaka_letter import fetch
         else:
             log.error("Unknown module: %s", name)
@@ -108,7 +112,11 @@ def parse_args():
     )
     parser.add_argument(
         "--only",
-        choices=["weather", "electricity", "waste", "calendar", "evaka", "hsl", "news", "keep", "wilma", "wilma_letter", "evaka_letter"],
+        choices=[
+            "weather", "electricity", "waste", "calendar", "calendar_full_upcoming",
+            "calendar_full_week", "evaka", "hsl", "news", "keep", "wilma",
+            "wilma_letter", "evaka_letter",
+        ],
         help="Run only one module (for testing)"
     )
     parser.add_argument(
@@ -211,7 +219,12 @@ def main():
     def _validate_grid(grid) -> bool:
         return (
             isinstance(grid, list) and 1 <= len(grid) <= 3
-            and all(isinstance(r, list) and len(r) == 3 for r in grid)
+            and all(
+                isinstance(r, list)
+                and len(r) in (1, 3)
+                and all(cell is None or isinstance(cell, str) for cell in r)
+                for r in grid
+            )
         )
 
     def _resolve_grid(cfg: dict, profile_name: str | None) -> list:
@@ -240,6 +253,19 @@ def main():
     if args.layout:
         log.info("Layout profile: %s", args.layout)
 
+    def _resolve_bottom(cfg: dict, profile_name: str | None) -> str:
+        layout_cfg = cfg.get("layout", {})
+        profiles   = layout_cfg.get("profiles", {})
+        name = profile_name or layout_cfg.get("active")
+        if name:
+            profile = profiles.get(name)
+            if profile and profile.get("bottom"):
+                return profile["bottom"]
+        return layout_cfg.get("bottom", "news")
+
+    bottom_module = _resolve_bottom(config, args.layout)
+    log.info("Bottom strip: %s", bottom_module)
+
     # Modules that require specific credentials to be configured
     _requires_config: dict[str, tuple[str, str]] = {
         "evaka": ("evaka", "username"),
@@ -265,8 +291,23 @@ def main():
             continue
         data[name] = fetch_module(name, config, use_cache)
 
-    # News – always fetched (full-width strip, not part of the configurable grid)
-    news = fetch_module("news", config, use_cache)
+    # Bottom strip module — news by default, overridable via layout.bottom
+    _bottom_requires_config: dict[str, tuple[str, str]] = {
+        "wilma_letter": ("wilma", "username"),
+    }
+    if bottom_module == "news":
+        bottom_data = fetch_module("news", config, use_cache)
+    else:
+        if bottom_module in data:
+            # Already fetched as a grid cell — reuse to avoid a second API call
+            bottom_data = data[bottom_module]
+        else:
+            req = _bottom_requires_config.get(bottom_module)
+            if req and not config.get(req[0], {}).get(req[1]):
+                log.warning("Bottom module %r requires %s.%s — showing empty strip", bottom_module, *req)
+                bottom_data = None
+            else:
+                bottom_data = fetch_module(bottom_module, config, use_cache)
 
     # Render image
     log.info("Rendering image...")
@@ -274,7 +315,9 @@ def main():
     image = render(
         data=data,
         layout=grid,
-        news=news,
+        news=None,
+        bottom_module=bottom_module,
+        bottom=bottom_data,
         width=width,
         height=height,
     )

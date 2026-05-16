@@ -1,6 +1,6 @@
 import math
 import platform
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -447,6 +447,121 @@ def _draw_calendar(draw: ImageDraw.Draw, data: dict | None,
         cy += block_h
 
 
+def _draw_calendar_upcoming_expanded(draw: ImageDraw.Draw, data: dict | None,
+                                     x: int, y: int, w: int, h: int):
+    """Dense upcoming list intended for full-width calendar profiles."""
+    cy = _label(
+        draw,
+        x,
+        y,
+        "KALENTERI - TULEVAT",
+        stale=bool(data and data.get("_stale")),
+    )
+
+    if not data:
+        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        return
+
+    events = data.get("events", [])
+    if not events:
+        _text(draw, (x + PAD, cy), "Ei tulevia tapahtumia", FONT_TINY, fill=GRAY)
+        return
+
+    max_w = w - 2 * PAD
+    row_h = 16
+    item_gap = 4
+
+    for ev in events:
+        date_label = _date_str(ev.get("date", ""), weekday=True)
+        t = ev.get("time")
+        if t:
+            date_label += f"  {t[:5]}"
+        else:
+            date_label += "  Koko paiva"
+
+        title = ev.get("title", "")
+        title_lines = _wrap_text(draw, title, FONT_SMALL, max_w)[:2]
+
+        needed_h = row_h + len(title_lines) * row_h + item_gap
+        if cy + needed_h > y + h - PAD:
+            break
+
+        _text(draw, (x + PAD, cy), date_label, FONT_TINY, fill=GRAY)
+        cy += row_h
+        for line in title_lines:
+            _text(draw, (x + PAD, cy), line, FONT_SMALL)
+            cy += row_h
+        cy += item_gap
+
+
+def _draw_calendar_week(draw: ImageDraw.Draw, data: dict | None,
+                        x: int, y: int, w: int, h: int):
+    """Compact 7-day weekly view for full-width calendar profiles."""
+    cy = _label(draw, x, y, "KALENTERI - VIIKKO", stale=bool(data and data.get("_stale")))
+
+    if not data:
+        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        return
+
+    events = data.get("events", [])
+    if not events:
+        _text(draw, (x + PAD, cy), "Ei tulevia tapahtumia", FONT_TINY, fill=GRAY)
+        return
+
+    today = date.today()
+    day_to_events: dict[date, list[dict]] = {
+        today + timedelta(days=i): [] for i in range(7)
+    }
+
+    for ev in events:
+        try:
+            d = date.fromisoformat(ev.get("date", ""))
+        except ValueError:
+            continue
+        if d in day_to_events:
+            day_to_events[d].append(ev)
+
+    cols = 7
+    gap = 6
+    inner_w = w - 2 * PAD
+    col_w = max(72, (inner_w - gap * (cols - 1)) // cols)
+    col_h = h - (cy - y) - PAD
+
+    for i in range(cols):
+        d = today + timedelta(days=i)
+        cx = x + PAD + i * (col_w + gap)
+        top = cy
+
+        head = f"{_DAYS_FI[d.weekday()]} {d.day}.{d.month}."
+        _text(draw, (cx, top), head, FONT_LABEL, fill=GRAY)
+
+        y_line = top + 15
+        draw.rectangle([cx, y_line, cx + col_w - 1, y_line + 1], fill=DIVIDER)
+
+        ey = y_line + 6
+        line_h = 14
+        max_lines = max(2, (col_h - 28) // line_h)
+        used = 0
+
+        for ev in day_to_events[d]:
+            if used >= max_lines:
+                break
+
+            prefix = f"{ev['time'][:5]} " if ev.get("time") else "- "
+            text = prefix + ev.get("title", "")
+            wrapped = _wrap_text(draw, text, FONT_LABEL, col_w)[:2]
+
+            for line in wrapped:
+                if used >= max_lines or ey + line_h > y + h - PAD:
+                    break
+                _text(draw, (cx, ey), line, FONT_LABEL)
+                ey += line_h
+                used += 1
+
+        if not day_to_events[d]:
+            _text(draw, (cx, ey), "-", FONT_LABEL, fill=GRAY)
+
+
 def _draw_hsl(draw: ImageDraw.Draw, data: dict | None,
               x: int, y: int, w: int, h: int):
     cy = _label(draw, x, y, "HSL lähdöt", stale=bool(data and data.get("_stale")))
@@ -611,6 +726,58 @@ def _draw_wilma_letter(draw: ImageDraw.Draw, data: dict | None,
             cy += line_h
 
 
+def _draw_wilma_letter_strip(draw: ImageDraw.Draw, data: dict | None,
+                            x: int, y: int, w: int, h: int):
+    """Full-width wilma_letter strip for the bottom bar (landscape two-column layout)."""
+    cy = _label(draw, x, y, "VIIKKOKIRJE", stale=bool(data and data.get("_stale")))
+
+    if not data:
+        _text(draw, (x + PAD, cy), "Ei saatavilla", FONT_SMALL, fill=GRAY)
+        return
+
+    bullets = data.get("bullets", [])
+    subject = data.get("subject", "")
+
+    if not bullets:
+        _text(draw, (x + PAD, cy), "Ei kirjettä", FONT_TINY, fill=GRAY)
+        return
+
+    if subject:
+        _text(draw, (x + PAD, cy), subject, FONT_SMALL)
+        cy += 20
+
+    # Two-column bullet layout across the full 800 px width
+    mid_x   = x + w // 2
+    half_w  = w // 2 - 2 * PAD
+    line_h  = 16
+    avail_h = h - (cy - y) - PAD
+    max_per_col = max(1, avail_h // line_h)
+
+    _vertical_divider(draw, mid_x - 1, cy, y + h - PAD)
+
+    ly = ry = cy
+    left_bullets  = bullets[:max_per_col]
+    right_bullets = bullets[max_per_col : max_per_col * 2]
+
+    for bullet in left_bullets:
+        if ly + line_h > y + h - PAD:
+            break
+        for line in _wrap_text(draw, "\u2022 " + bullet, FONT_TINY, half_w)[:2]:
+            if ly + line_h > y + h - PAD:
+                break
+            _text(draw, (x + PAD, ly), line, FONT_TINY)
+            ly += line_h
+
+    for bullet in right_bullets:
+        if ry + line_h > y + h - PAD:
+            break
+        for line in _wrap_text(draw, "\u2022 " + bullet, FONT_TINY, half_w)[:2]:
+            if ry + line_h > y + h - PAD:
+                break
+            _text(draw, (mid_x + PAD, ry), line, FONT_TINY)
+            ry += line_h
+
+
 # ── Placeholder (unconfigured / missing module) ──────────────────────────────
 
 def _draw_placeholder(draw: ImageDraw.Draw, data: dict | None,
@@ -625,6 +792,8 @@ def _draw_placeholder(draw: ImageDraw.Draw, data: dict | None,
 _DRAW_FUNCS: dict[str, object] = {
     "weather":     _draw_weather,
     "calendar":    _draw_calendar,
+    "calendar_full_upcoming": _draw_calendar_upcoming_expanded,
+    "calendar_full_week": _draw_calendar_week,
     "electricity": _draw_electricity,
     "hsl":         _draw_hsl,
     "waste":       _draw_waste,
@@ -632,6 +801,12 @@ _DRAW_FUNCS: dict[str, object] = {
     "wilma":        lambda draw, data, x, y, w, h: _draw_daycare(draw, data, x, y, w, h, label="KOULU"),
     "wilma_letter":  _draw_wilma_letter,
     "evaka_letter":  _draw_evaka_letter,
+}
+
+# Modules that can occupy the bottom full-width strip (instead of news)
+_BOTTOM_DRAW_FUNCS: dict[str, object] = {
+    "news":         _draw_news,
+    "wilma_letter": _draw_wilma_letter_strip,
 }
 
 
@@ -666,11 +841,13 @@ DEFAULT_LAYOUT: list[list[str | None]] = [
 
 
 def render(
-    data:   "dict[str, dict | None] | None" = None,
-    layout: "list[list[str | None]] | None" = None,
-    news:   dict | None = None,
-    width:  int = WIDTH,
-    height: int = HEIGHT,
+    data:          "dict[str, dict | None] | None" = None,
+    layout:        "list[list[str | None]] | None" = None,
+    news:          dict | None = None,
+    width:         int = WIDTH,
+    height:        int = HEIGHT,
+    bottom_module: str = "news",
+    bottom:        dict | None = None,
 ) -> Image.Image:
     """
     Renders the dashboard and returns a PIL Image (mode L, 800×480).
@@ -679,20 +856,23 @@ def render(
     ----------
     data   : mapping of module name → fetch() result dict (or None if unavailable).
              e.g. {"weather": {...}, "evaka": {...}, "hsl": None, ...}
-    layout : 2×3 grid specifying which module occupies each cell.
+        layout : row list specifying which module occupies each cell.
              Defaults to DEFAULT_LAYOUT if not provided.
              Use None in a cell to leave it blank.
+             A row may contain either 3 modules (classic grid row) or
+             1 module (full-width row).
              e.g. [["evaka", "calendar", "weather"],
-                   ["electricity", "hsl", "waste"]]
+                 ["electricity", "hsl", "waste"]]
+                [["calendar_full_upcoming"]]
     news   : news module data (always rendered full-width at the bottom).
     width, height : image dimensions in pixels.
 
     Layout (N rows, 1–3):
 
-      ┌──────────────────┬──────────────────┬──────────────────┐
-      │  layout[0][0]    │  layout[0][1]    │  layout[0][2]    │  row_h px each
-      ├─ ... ────────────┼──────────────────┼──────────────────┤
-      │  layout[N-1][0]  │  layout[N-1][1]  │  layout[N-1][2]  │
+    ┌──────────────────┬──────────────────┬──────────────────┐
+    │  row with 3 cells                                  │
+    ├─────────────────────────────────────────────────────┤
+    │  row with 1 full-width cell                        │
       ├──────────────────┴──────────────────┴──────────────────┤  NEWS_H px
       │  UUTISET  (full width)                                  │
       └────────────────────────────────────────────────────────┘
@@ -718,19 +898,32 @@ def render(
     img  = Image.new("L", (width, height), BG)
     draw = ImageDraw.Draw(img)
 
-    # Grid dividers
-    _vertical_divider(draw, col_w,         0, news_y)
-    _vertical_divider(draw, col_w * 2 + 1, 0, news_y)
+    # Row and section dividers
     for i in range(1, n_rows):
         _divider(draw, 0, i * row_h, width)
     _divider(draw, 0, news_y, width)
 
     # Draw each cell according to the layout grid
     for row_idx, row in enumerate(layout[:n_rows]):
-        for col_idx, module_name in enumerate(row[:3]):
-            x = xs[col_idx]
-            y = ys[row_idx]
-            w = ws[col_idx]
+        y = ys[row_idx]
+        row_cells = list(row) if isinstance(row, list) else []
+
+        if len(row_cells) == 1:
+            cell_specs = [(0, width, row_cells[0])]
+        else:
+            # Backward compatible behavior: any non-1 row is treated as 3 cells.
+            while len(row_cells) < 3:
+                row_cells.append(None)
+            row_cells = row_cells[:3]
+            _vertical_divider(draw, col_w, y, y + row_h)
+            _vertical_divider(draw, col_w * 2 + 1, y, y + row_h)
+            cell_specs = [
+                (xs[0], ws[0], row_cells[0]),
+                (xs[1], ws[1], row_cells[1]),
+                (xs[2], ws[2], row_cells[2]),
+            ]
+
+        for x, w, module_name in cell_specs:
             draw_fn   = _DRAW_FUNCS.get(module_name) if module_name else None
             cell_data = data.get(module_name) if module_name else None
             if draw_fn:
@@ -739,8 +932,10 @@ def render(
                 _draw_placeholder(draw, cell_data, x, y, w, row_h,
                                   name=module_name or "")
 
-    # News strip — always full-width at the bottom
-    _draw_news(draw, news, 0, news_y, width, NEWS_H)
+    # Bottom strip — news by default, overridable via bottom_module
+    bottom_data = bottom if bottom is not None else news
+    bottom_fn   = _BOTTOM_DRAW_FUNCS.get(bottom_module, _draw_news)
+    bottom_fn(draw, bottom_data, 0, news_y, width, NEWS_H)
 
     return img
 

@@ -26,6 +26,10 @@ caruna:
 # iCal links – no OAuth needed.
 # Google Calendar: Settings → (your calendar) → "Secret address in iCal format"
 # Do not share config.yaml – the URL contains a secret token!
+# max_events controls how many upcoming events are stored in cache for rendering.
+calendar:
+  max_events: 24
+
 calendars:
   - name: "Personal"
     ical_url: "https://calendar.google.com/calendar/ical/YOUR_CALENDAR_ID/private-TOKEN/basic.ics"
@@ -92,9 +96,12 @@ hsl:
   min_walk_rail: 15         # minimum minutes to walk to a train/metro station
 
 # ── Layout ───────────────────────────────────────────────────────────────────
-# Assign any data module to any of the grid cells (3 columns × 1–3 rows).
+# Assign any data module to rows. Each row can have either:
+# - 3 modules (classic 3-column row), or
+# - 1 module (full-width row)
 # Available modules: weather, calendar, electricity, waste, hsl, evaka, wilma,
-#                    wilma_letter, evaka_letter, keep
+#                    wilma_letter, evaka_letter, keep,
+#                    calendar_full_upcoming, calendar_full_week
 # Use ~ (null) to leave a cell blank.
 # The news strip is always rendered full-width at the bottom and is not configurable.
 #
@@ -116,6 +123,12 @@ layout:
 #      grid:
 #        - [evaka_letter, calendar, weather]
 #        - [evaka,        ~,        hsl    ]
+#    calendar_upcoming:
+#      grid:
+#        - [calendar_full_upcoming]
+#    calendar_week:
+#      grid:
+#        - [calendar_full_week]
 
 # ── Display ───────────────────────────────────────────────────────────────────
 display:
